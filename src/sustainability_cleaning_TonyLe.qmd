@@ -1,0 +1,441 @@
+---
+title: "HW03 – Data Cleaning and Tidying: Sustainability Survey"
+author: "Tony Le"
+date: 03/18/2026
+format: html
+output-file: "HW03 - TonyLe"
+output-ext: html
+editor: source
+---
+
+# Overview
+
+This document cleans and tidies the Fall 2015 Truman State University Sustainability Survey dataset. Column renaming was completed in Excel (see the Dictionary tab) and the working sheet was exported as `Working.csv`. All remaining cleaning steps are performed below in R. My goal in this assignment is to make a subset of this data set as clean and tidy as possible.
+
+------------------------------------------------------------------------
+
+# Question 2
+
+# Setup: Load Libraries and Data
+
+```{r}
+#| label: setup
+
+# Load the tidyverse package
+library(tidyverse)
+```
+
+```{r}
+# Read the CSV that was exported from the Working sheet in Excel.
+# na.strings converts both empty strings and "NA" text into proper R NA values.
+df <- read.csv("Working.csv",
+               stringsAsFactors = FALSE,
+               na.strings       = c("", "NA"))
+
+# glimpse() gives a compact overview: number of rows/columns,
+# column names, data types, and first few values of each column.
+glimpse(df)
+```
+
+------------------------------------------------------------------------
+
+# Data Cleaning Steps
+
+## (a) Recode Gender as a Factor with 3 Short Categories
+
+```{r}
+#| label: clean-gender
+
+# The raw data contains three character values for Gender.
+# We recode them to short labels and convert to a factor so that
+# R treats Gender as a categorical variable (not free text) in
+# all plots and models.
+
+df <- df %>%
+  mutate(
+    Gender = case_when(
+      Gender == "Female"                   ~ "Female",  # keep as-is
+      Gender == "Male"                     ~ "Male",    # keep as-is
+      Gender == "Other/ prefer not to say" ~ "Other",  # shorten the label
+      TRUE                                 ~ NA_character_  # any unexpected value -> NA
+    ),
+    # Wrap the recoded character column in factor() with explicit levels.
+    # This controls the display order in every table and graph.
+    Gender = factor(Gender, levels = c("Female", "Male", "Other"))
+  )
+
+# Verify: should show Female=140, Male=38, Other=4
+df %>% count(Gender)
+```
+
+
+------------------------------------------------------------------------
+
+## (b) Recode Grade Level to Numeric Values 1–5
+
+```{r}
+#| label: clean-grade
+
+# Step 1: trimws() strips any leading or trailing whitespace from the
+# Grade column. Without this, "First-year " (with a hidden trailing space)
+# would not match "First-year" in case_when and would silently become NA.
+# Step 2: case_when maps each year-description to an integer 1-5 so that
+# graphs automatically display grade levels in the correct chronological order.
+
+df <- df %>%
+  mutate(
+    Grade = trimws(Grade),   # remove hidden whitespace (e.g. "First-year ")
+    Grade = case_when(
+      Grade == "First-year"                   ~ 1,
+      Grade == "Second-year"                  ~ 2,
+      Grade == "Third-year"                   ~ 3,
+      Grade == "Fourth-year"                  ~ 4,
+      Grade == "more than 4 years at Truman"  ~ 5,
+      TRUE                                    ~ NA_real_  # safety net for unexpected values
+    )
+  )
+
+# Verify: should show counts for integers 1-5, no NAs
+df %>% count(Grade)
+```
+
+**Explanation:** The homework warns that some grade-level values contain extra spaces. `trimws()` solves this in one step rather than having to hard-code every possible spacing variant inside `case_when`. The result is numeric so R can sort and scale grade levels correctly on plot axes.
+
+------------------------------------------------------------------------
+
+## (c) Split School Column into School1, School2, and School3
+
+```{r}
+#| label: clean-school
+
+# The School column holds one, two, or three school abbreviations
+# separated by single spaces (e.g. "HSE SAM BUS").
+# separate() splits the column on whitespace into up to three pieces.
+#   extra = "drop"  -> silently discard any token beyond the 3rd
+#   fill  = "right" -> pad with NA on the right for students with
+#                      fewer than 3 schools listed
+# Note: we pass col as a quoted string "School" to avoid the
+# "object 'School' not found" error that occurs in some R versions
+# when the bare column name is used.
+
+df <- df %>%
+  separate(
+    col   = "School",
+    into  = c("School1", "School2", "School3"),
+    sep   = " ",
+    extra = "drop",   # ignore any extra tokens beyond 3
+    fill  = "right"   # fill unused columns with NA
+  )
+
+# Verify the split worked as expected
+cat("Students listing 2+ schools:", sum(!is.na(df$School2)), "\n")
+cat("Students listing 3  schools:", sum(!is.na(df$School3)), "\n")
+
+df %>% select(School1, School2, School3) %>% head(10)
+```
+
+------------------------------------------------------------------------
+
+## (d) Create the SAM Binary Indicator Column
+
+```{r}
+#| label: create-SAM
+
+# Create a column named SAM that equals 1 if the student
+# listed the School of Science and Mathematics in ANY of the three school
+# columns, and 0 otherwise.
+#
+# if_else() evaluates the logical condition for each row:
+#   - TRUE  -> 1L  (the student listed SAM)
+#   - FALSE -> 0L  (the student did not list SAM)
+#   - missing = 0L -> if a comparison involves NA (e.g. School2 is NA),
+#                     treat it as "not SAM" rather than producing NA
+
+df <- df %>%
+  mutate(
+    SAM = if_else(
+      School1 == "SAM" | School2 == "SAM" | School3 == "SAM",
+      true    = 1L,
+      false   = 0L,
+      missing = 0L   # NA comparisons treated as FALSE (not listed = not SAM)
+    )
+  )
+
+# Verify: total should be 50 SAM students
+df %>% count(SAM)
+```
+
+
+------------------------------------------------------------------------
+
+## (e) Recode Heard_sustain from Text to 0/1
+
+```{r}
+#| label: recode-heard-sustain
+
+# The "heard about" columns store a text label (e.g. "Sustainability Week")
+# when the student checked that activity, and NA when they did not.
+# The "participated" columns use 1 (participated) and 0 (did not).
+# We need to make Heard_sustain consistent with the participated coding.
+#
+# case_when maps:
+#   "Sustainability Week" -> 1  (heard about it)
+#   anything else / NA   -> 0  (did not hear about it)
+# Show the values BEFORE recoding so the change is visible in the PDF
+cat("--- Before recoding ---\n")
+df %>% count(Heard_sustain) %>% print()
+
+df <- df %>%
+  mutate(
+    Heard_sustain = case_when(
+      Heard_sustain == "Sustainability Week" ~ 1L,  # heard = 1
+      TRUE                                  ~ 0L   # not heard (including NA) = 0
+    )
+  )
+
+# Show the values AFTER recoding to confirm the transformation
+cat("\n--- After recoding ---\n")
+df %>% count(Heard_sustain) %>% print()
+```
+
+
+------------------------------------------------------------------------
+
+## (f) Fix Typos in the Program Effectiveness Variable
+
+```{r}
+#| label: fix-typos-effective
+
+# The Effective column contains a clear data-entry typo: "Neutrale" instead
+# of "Neutral". str_replace() with anchors (^ = start, $ = end) matches only
+# the exact misspelling and replaces it, leaving all other values untouched.
+
+cat("--- Before fixing typos ---\n")
+df %>% count(Effective) %>% print()
+
+df <- df %>%
+  mutate(
+    Effective = str_replace(Effective, "^Neutrale$", "Neutral")
+    # ^ anchors to start of string, $ anchors to end,
+    # so only the exact word "Neutrale" is replaced.
+  )
+
+cat("\n--- After fixing typos ---\n")
+df %>% count(Effective) %>% print()
+```
+
+**Explanation:** Using anchors `^` and `$` is a safety measure — it prevents accidentally replacing "Neutrale" if it appeared as part of a longer phrase. After this step, "Neutral" should show a combined count of 38 (31 + 7 from the original dirty data).
+
+------------------------------------------------------------------------
+
+## (g) Recode Tuition Increase as an Ordered Factor
+
+```{r}
+#| label: recode-tuition
+
+# The Increase_rate column is currently a character variable.
+# By default R would display these values in alphabetical order, which is
+# meaningless for this ordinal variable ("$1-$10" before "Not willing at all"
+# alphabetically, for example).
+#
+# Solution: convert to an ORDERED factor with the five levels listed in the
+# exact sequence specified in the assignment. R will then display and sort
+# these values correctly in every plot and table automatically.
+#
+# IMPORTANT: the level labels below match the EXACT capitalisation found in
+# the raw data — do NOT change them. Mismatched capitalisation would cause
+# all values to become NA.
+
+# Show current (alphabetical / arbitrary) ordering
+cat("--- Before recoding ---\n")
+df %>% count(Increase_rate) %>% print()
+
+# Define the correct ordinal sequence (low to high willingness)
+tuition_levels <- c(
+  "Not willing at all",   # least willing
+  "$1-$10",
+  "$11-$20",
+  "$21-$30",
+  "anything above $30"    # most willing
+)
+
+df <- df %>%
+  mutate(
+    Increase_rate = factor(
+      Increase_rate,
+      levels  = tuition_levels,
+      ordered = TRUE   # ordered = TRUE marks this as an ordinal variable
+    )
+  )
+
+# Verify: levels should now appear in the correct low-to-high order
+cat("\n--- After recoding – correct ordinal levels ---\n")
+print(levels(df$Increase_rate))
+df %>% count(Increase_rate) %>% print()
+```
+
+**Explanation:** `ordered = TRUE` tells R that the categories have a meaningful rank (`"Not willing at all"` \< `"$1-$10"` \< … \< `"anything above $30"`). Without it, R treats the factor as nominal and any graph would display bars or axes in an arbitrary or alphabetical order. We do **not** apply `str_to_title()` because the raw data already uses the exact same capitalisation as the assignment's specified labels — changing case would cause non-matching values to silently become `NA`.
+
+------------------------------------------------------------------------
+
+## (h) Export the Cleaned Dataset
+
+```{r}
+#| label: export-data
+
+# write.csv exports the cleaned dataframe to a CSV file.
+# row.names = FALSE prevents R from adding an unwanted row-number column
+# as the first column of the output file.
+
+write.csv(df, "sustainability_cleaned_TonyLe.csv", row.names = FALSE)
+
+# Confirm the export succeeded and show the final dimensions
+cat("Export complete:", nrow(df), "rows x", ncol(df), "columns.\n")
+cat("File saved as: sustainability_cleaned_TonyLe.csv\n")
+```
+
+------------------------------------------------------------------------
+
+# Question 3
+
+# Visualization: Tuition Willingness by First-Listed School
+
+## Graph
+
+```{r}
+#| label: tuition-by-school
+#| fig-width: 9
+#| fig-height: 5.5
+#| fig-cap: "Stacked bar chart showing the percentage distribution of tuition-increase
+#|   willingness for each first-listed school. Red shades = less willing,
+#|   blue shades = more willing. Schools are ordered from lowest to highest
+#|   mean willingness (left to right)."
+
+# Lookup table: map short abbreviations to full school names for readable labels
+school_labels <- c(
+  BUS = "Business",
+  HSE = "Health Sci & Ed",
+  IDS = "Undeclared/IDS",
+  SAL = "Arts & Letters",
+  SAM = "Science & Math",
+  SCS = "Social & Cultural"
+)
+
+# Colour palette: red = low willingness, blue = high willingness
+# (intuitive: warm colours = reluctant, cool colours = willing)
+will_colors <- c(
+  "Not willing at all"  = "#D73027",   # deep red
+  "$1-$10"              = "#F46D43",   # orange-red
+  "$11-$20"             = "#FEE090",   # yellow
+  "$21-$30"             = "#74ADD1",   # light blue
+  "anything above $30"  = "#313695"    # deep blue
+)
+
+# Step 1: Compute mean willingness score per school so we can order schools
+#         from least to most willing on the x-axis.
+#         as.integer() converts the ordered factor levels to 1-5 numerically.
+school_order <- df %>%
+  filter(!is.na(School1), !is.na(Increase_rate)) %>%
+  mutate(will_num = as.integer(Increase_rate)) %>%
+  group_by(School1) %>%
+  summarise(mean_will = mean(will_num), .groups = "drop") %>%
+  arrange(mean_will) %>%
+  mutate(School_Full = recode(School1, !!!school_labels))
+
+# Step 2: Build the percentage table for the stacked bars
+plot_df <- df %>%
+  filter(!is.na(School1), !is.na(Increase_rate)) %>%
+  mutate(School_Full = recode(School1, !!!school_labels)) %>%
+  count(School_Full, Increase_rate) %>%
+  group_by(School_Full) %>%
+  mutate(pct = n / sum(n) * 100) %>%   # convert counts to percentages within each school
+  ungroup() %>%
+  # Apply the school ordering determined in Step 1
+  mutate(School_Full = factor(School_Full,
+                              levels = school_order$School_Full))
+
+# Step 3: Draw the stacked bar chart
+ggplot(plot_df,
+       aes(x    = School_Full,
+           y    = pct,
+           fill = Increase_rate)) +
+  geom_col(position = "stack",
+           width     = 0.65,
+           colour    = "white",      # thin white borders separate the stacked segments
+           linewidth = 0.3) +
+  scale_fill_manual(
+    values = will_colors,
+    name   = "Willingness to\nIncrease Tuition"
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(scale = 1),   # format y-axis as percentages
+    expand = expansion(mult = c(0, 0.03))
+  ) +
+  labs(
+    title    = "Student Willingness to Increase Tuition by First-Listed School",
+    subtitle = "Sustainability Office Survey — Truman State University, Fall 2015",
+    x        = "First-Listed School  (ordered least → most willing)",
+    y        = "Percentage of Students"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title         = element_text(face = "bold", size = 13),
+    plot.subtitle      = element_text(colour = "grey40", size = 9),
+    axis.text.x        = element_text(angle = 20, hjust = 1),
+    panel.grid.major.x = element_blank(),
+    legend.position    = "right"
+  )
+```
+
+## Summary Table
+
+```{r}
+#| label: summary-table
+
+# Compute the key statistics per school needed to answer Q3b.
+# will_num converts the ordered factor to an integer 1-5 for arithmetic.
+summary_tbl <- df %>%
+  filter(!is.na(School1), !is.na(Increase_rate)) %>%
+  mutate(
+    will_num    = as.integer(Increase_rate),
+    School_Full = recode(School1, !!!school_labels)
+  ) %>%
+  group_by(School_Full) %>%
+  summarise(
+    N                = n(),
+    Mean_Willingness = round(mean(will_num), 2),       # average ordinal score 1-5
+    Pct_Not_Willing  = round(mean(will_num == 1) * 100, 1),  # % who said "Not willing at all"
+    .groups = "drop"
+  ) %>%
+  arrange(Mean_Willingness)   # sort from least to most willing
+
+knitr::kable(
+  summary_tbl,
+  col.names = c("School", "N", "Mean Willingness (1–5)",
+                "% Not Willing At All"),
+  caption   = paste("Summary of tuition-increase willingness by first-listed school.",
+                    "Scale: 1 = Not willing at all, 5 = Anything above $30.",
+                    "Sorted from least to most willing.")
+)
+```
+
+## Interpretation (Q3b)
+
+```{r}
+#| label: q3b-answer
+
+# Extract the least and most willing schools programmatically
+least_willing <- summary_tbl %>% slice_min(Mean_Willingness, n = 1)
+most_willing  <- summary_tbl %>% slice_max(Mean_Willingness, n = 1)
+
+cat("School with LEAST willingness:", least_willing$School_Full,
+    "(mean =", least_willing$Mean_Willingness, ")\n")
+cat("School with MOST  willingness:", most_willing$School_Full,
+    "(mean =", most_willing$Mean_Willingness, ")\n")
+```
+
+**Answer to Q3b:**
+
+- The school with the **least** willingness to increase tuition is **Business** (mean score = 1.83, 30.4% "Not willing at all") — appearing at the **top** of the table above since it is sorted low-to-high.
+- The school with the **most** willingness is **Science & Math** (mean score = 2.62, only 17.0% "Not willing at all") — appearing at the **bottom** of the table.
+- Across all schools, the two lowest categories (`"Not willing at all"` and `"$1–$10"`) account for the majority of responses in every group, suggesting that cost resistance is a university-wide phenomenon and not driven by any one school in particular.
