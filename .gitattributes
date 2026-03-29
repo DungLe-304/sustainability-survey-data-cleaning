@@ -1,6 +1,0 @@
-# Ignore all generated HTML/JS/CSS assets
-src/sustainability_cleaning_TonyLe_files/** linguist-vendored
-*.html linguist-generated
-*.pdf linguist-documentation
-*.js linguist-vendored
-*.css linguist-vendored
