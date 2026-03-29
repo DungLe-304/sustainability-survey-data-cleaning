@@ -1,9 +1,9 @@
 ---
-title: "HW03 – Data Cleaning and Tidying: Sustainability Survey"
-author: "Tony Le"
+title: "Data Cleaning, Tidying and Visualization: Sustainability Survey"
+author: "Dung (Tony) Le"
 date: 03/18/2026
 format: html
-output-file: "HW03 - TonyLe"
+output-file: "Data project TonyLe"
 output-ext: html
 editor: source
 ---
@@ -28,7 +28,7 @@ library(tidyverse)
 ```{r}
 # Read the CSV that was exported from the Working sheet in Excel.
 # na.strings converts both empty strings and "NA" text into proper R NA values.
-df <- read.csv("Working.csv",
+df <- read.csv("../raw_data/Working.csv",
                stringsAsFactors = FALSE,
                na.strings       = c("", "NA"))
 
@@ -439,3 +439,474 @@ cat("School with MOST  willingness:", most_willing$School_Full,
 - The school with the **least** willingness to increase tuition is **Business** (mean score = 1.83, 30.4% "Not willing at all") — appearing at the **top** of the table above since it is sorted low-to-high.
 - The school with the **most** willingness is **Science & Math** (mean score = 2.62, only 17.0% "Not willing at all") — appearing at the **bottom** of the table.
 - Across all schools, the two lowest categories (`"Not willing at all"` and `"$1–$10"`) account for the majority of responses in every group, suggesting that cost resistance is a university-wide phenomenon and not driven by any one school in particular.
+
+---
+
+```{r}
+#| label: setup-viz
+library(plotly)    # interactive plots
+library(scales)    # format axis labels
+
+df <- read.csv("../raw_data/Working.csv",
+               stringsAsFactors = FALSE,
+               na.strings = c("", "NA"))
+```
+
+# Exploratory Data Analysis
+
+## 1. Gender & Grade Level Distribution
+
+```{r}
+#| label: gender-grade-plot
+#| fig-cap: "Distribution of survey respondents by Gender and Grade Level"
+
+# --- Plot 1: Gender distribution (interactive pie chart) ---
+gender_counts <- df %>%
+  mutate(Gender = case_when(
+    Gender == "Female"                   ~ "Female",
+    Gender == "Male"                     ~ "Male",
+    Gender == "Other/ prefer not to say" ~ "Other"
+  )) %>%
+  count(Gender)
+
+p1 <- plot_ly(
+  gender_counts,
+  labels = ~Gender,
+  values = ~n,
+  type   = "pie",
+  hole   = 0.4,      # donut style
+  marker = list(colors = c("#E07B8A", "#6B9FD4", "#A8D5A2"),
+                line = list(color = "white", width = 2)),
+  textinfo      = "label+percent",
+  hovertemplate = "<b>%{label}</b><br>Count: %{value}<br>%{percent}<extra></extra>"
+) %>%
+  layout(
+    title = list(text = "Gender Distribution", font = list(size = 16)),
+    showlegend = TRUE,
+    legend = list(orientation = "h", y = -0.1)
+  )
+
+# --- Plot 2: Grade level distribution (interactive bar chart) ---
+grade_counts <- df %>%
+  mutate(
+    Grade = trimws(Grade),
+    Grade = case_when(
+      Grade == "First-year"                   ~ "1st Year",
+      Grade == "Second-year"                  ~ "2nd Year",
+      Grade == "Third-year"                   ~ "3rd Year",
+      Grade == "Fourth-year"                  ~ "4th Year",
+      Grade == "more than 4 years at Truman"  ~ "5+ Years"
+    ),
+    Grade = factor(Grade,
+                   levels = c("1st Year", "2nd Year", "3rd Year",
+                               "4th Year", "5+ Years"))
+  ) %>%
+  count(Grade)
+
+p2 <- plot_ly(
+  grade_counts,
+  x    = ~Grade,
+  y    = ~n,
+  type = "bar",
+  marker = list(
+    color = c("#D4E6F1", "#A9CCE3", "#7FB3D3", "#5499C2", "#2E86C1"),
+    line  = list(color = "white", width = 1.5)
+  ),
+  text          = ~n,
+  textposition  = "outside",
+  hovertemplate = "<b>%{x}</b><br>Count: %{y}<extra></extra>"
+) %>%
+  layout(
+    title  = list(text = "Grade Level Distribution", font = list(size = 16)),
+    xaxis  = list(title = "Grade Level"),
+    yaxis  = list(title = "Number of Students", range = c(0, 65)),
+    plot_bgcolor  = "rgba(0,0,0,0)",
+    paper_bgcolor = "rgba(0,0,0,0)"
+  )
+
+# Display both plots
+p1
+p2
+```
+
+---
+
+## 2. Heard About vs. Participated in Activities
+
+```{r}
+#| label: heard-vs-participated
+#| fig-cap: "Comparison of how many students heard about vs. actually participated in each sustainability activity"
+
+# Recode all Heard columns to 0/1 first for this plot
+df_heard <- df %>%
+  mutate(across(starts_with("Heard_"),
+                ~ if_else(!is.na(.), 1L, 0L)))
+
+# Activity names (short labels)
+activity_labels <- c(
+  "Heard_sustain"    = "Sustainability Week",
+  "Heard_earthweek"  = "Earth Week",
+  "Heard_greenthumb" = "Green Thumb",
+  "Heard_bike"       = "Bike Co-op",
+  "Heard_conference" = "ENVS Conference",
+  "Heard_recycle"    = "Recyclemania",
+  "Heard_buddies"    = "ENV Buddies"
+)
+
+part_labels <- c(
+  "Part_sustain"     = "Sustainability Week",
+  "Part_earthweek"   = "Earth Week",
+  "Part_greenthumb"  = "Green Thumb",
+  "Part_bike"        = "Bike Co-op",
+  "Part_conference"  = "ENVS Conference",
+  "Part_recycle"     = "Recyclemania",
+  "Part_buddies"     = "ENV Buddies"
+)
+
+# Build summary table
+heard_sums <- df_heard %>%
+  summarise(across(starts_with("Heard_"), sum, na.rm = TRUE)) %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "count") %>%
+  mutate(activity = recode(variable, !!!activity_labels),
+         type = "Heard About")
+
+part_sums <- df %>%
+  summarise(across(starts_with("Part_"), sum, na.rm = TRUE)) %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "count") %>%
+  mutate(activity = recode(variable, !!!part_labels),
+         type = "Participated")
+
+combined <- bind_rows(heard_sums, part_sums) %>%
+  mutate(pct = round(count / 182 * 100, 1))
+
+# Grouped bar chart
+p3 <- plot_ly(
+  combined,
+  x       = ~activity,
+  y       = ~pct,
+  color   = ~type,
+  type    = "bar",
+  colors  = c("Heard About" = "#5B9BD5", "Participated" = "#ED7D31"),
+  text    = ~paste0(pct, "%"),
+  textposition = "outside",
+  hovertemplate = "<b>%{x}</b><br>%{data.name}: %{y}%<br>(%{customdata} students)<extra></extra>",
+  customdata = ~count
+) %>%
+  layout(
+    barmode = "group",
+    title   = list(text = "Heard About vs. Participated in Each Activity",
+                   font = list(size = 16)),
+    xaxis   = list(title = "", tickangle = -20),
+    yaxis   = list(title = "% of Students (n=182)", range = c(0, 80)),
+    legend  = list(orientation = "h", y = -0.25),
+    plot_bgcolor  = "rgba(0,0,0,0)",
+    paper_bgcolor = "rgba(0,0,0,0)"
+  )
+
+p3
+```
+
+**Key observation:** There is a large gap between *awareness* and *participation* across all activities — students have heard of most activities but very few have actually taken part. This highlights a potential **outreach-to-engagement gap** worth addressing.
+
+---
+
+## 3. Confidence Level in Understanding Sustainability
+
+```{r}
+#| label: confidence-plots
+#| fig-cap: "Confidence level distribution overall and broken down by School"
+
+# Recode Confidence to ordered factor
+conf_levels <- c("Not Confident at All", "Slightly Confident",
+                 "Neutral", "Confident", "Extremely Confident")
+
+df_conf <- df %>%
+  mutate(
+    Confidence = factor(Confidence, levels = conf_levels, ordered = TRUE),
+    School1 = word(School, 1)   # extract first school for breakdown
+  )
+
+# --- Plot 4: Overall confidence distribution ---
+conf_counts <- df_conf %>%
+  count(Confidence) %>%
+  mutate(pct = round(n / sum(n) * 100, 1))
+
+conf_colors <- c("#E74C3C", "#E67E22", "#F1C40F", "#2ECC71", "#27AE60")
+
+p4 <- plot_ly(
+  conf_counts,
+  x    = ~Confidence,
+  y    = ~pct,
+  type = "bar",
+  marker = list(
+    color = conf_colors,
+    line  = list(color = "white", width = 1.5)
+  ),
+  text          = ~paste0(pct, "%\n(n=", n, ")"),
+  textposition  = "outside",
+  hovertemplate = "<b>%{x}</b><br>%{y}% of students<br>Count: %{customdata}<extra></extra>",
+  customdata    = ~n
+) %>%
+  layout(
+    title  = list(text = "Overall Confidence in Understanding Sustainability",
+                  font = list(size = 16)),
+    xaxis  = list(title = "Confidence Level", tickangle = -15),
+    yaxis  = list(title = "% of Students", range = c(0, 45)),
+    plot_bgcolor  = "rgba(0,0,0,0)",
+    paper_bgcolor = "rgba(0,0,0,0)"
+  )
+
+# --- Plot 5: Confidence by School (stacked bar) ---
+school_labels <- c(
+  BUS = "Business", HSE = "Health Sci & Ed",
+  IDS = "Undeclared/IDS", SAL = "Arts & Letters",
+  SAM = "Science & Math", SCS = "Social & Cultural"
+)
+
+conf_school <- df_conf %>%
+  filter(!is.na(School1), !is.na(Confidence)) %>%
+  mutate(School_Full = recode(School1, !!!school_labels)) %>%
+  count(School_Full, Confidence) %>%
+  group_by(School_Full) %>%
+  mutate(pct = round(n / sum(n) * 100, 1)) %>%
+  ungroup()
+
+p5 <- plot_ly(
+  conf_school,
+  x       = ~School_Full,
+  y       = ~pct,
+  color   = ~Confidence,
+  type    = "bar",
+  colors  = conf_colors,
+  hovertemplate = "<b>%{x}</b><br>%{data.name}: %{y}%<extra></extra>"
+) %>%
+  layout(
+    barmode = "stack",
+    title   = list(text = "Confidence Level by First-Listed School",
+                   font = list(size = 16)),
+    xaxis   = list(title = "School", tickangle = -15),
+    yaxis   = list(title = "% of Students", ticksuffix = "%"),
+    legend  = list(title = list(text = "Confidence Level"),
+                   orientation = "h", y = -0.3),
+    plot_bgcolor  = "rgba(0,0,0,0)",
+    paper_bgcolor = "rgba(0,0,0,0)"
+  )
+
+p4
+p5
+```
+
+---
+
+## 4. Office Preference: Physical vs. Online
+
+```{r}
+#| label: office-preference
+#| fig-cap: "Student preferences for physical vs. online Sustainability Office"
+
+# --- Plot 6: Overall office preference ---
+office_counts <- df %>%
+  filter(!is.na(Office_space)) %>%
+  count(Office_space) %>%
+  mutate(pct = round(n / sum(n) * 100, 1))
+
+p6 <- plot_ly(
+  office_counts,
+  labels = ~Office_space,
+  values = ~n,
+  type   = "pie",
+  hole   = 0.45,
+  marker = list(
+    colors = c("#2E86C1", "#E74C3C", "#95A5A6"),
+    line   = list(color = "white", width = 2)
+  ),
+  textinfo      = "label+percent",
+  hovertemplate = "<b>%{label}</b><br>Count: %{value}<br>%{percent}<extra></extra>"
+) %>%
+  layout(
+    title      = list(text = "Office Preference: Physical vs. Online",
+                      font = list(size = 16)),
+    showlegend = TRUE,
+    legend     = list(orientation = "h", y = -0.1)
+  )
+
+# --- Plot 7: Office preference by School ---
+office_school <- df %>%
+  filter(!is.na(Office_space)) %>%
+  separate("School", into = c("School1", "School2", "School3"),
+           sep = " ", extra = "drop", fill = "right") %>%
+  filter(!is.na(School1)) %>%
+  mutate(School_Full = recode(School1, !!!school_labels)) %>%
+  count(School_Full, Office_space) %>%
+  group_by(School_Full) %>%
+  mutate(pct = round(n / sum(n) * 100, 1)) %>%
+  ungroup()
+
+office_colors <- c(
+  "Physical Office" = "#2E86C1",
+  "Online Office"   = "#E74C3C",
+  "No preference"   = "#95A5A6"
+)
+
+p7 <- plot_ly(
+  office_school,
+  x       = ~School_Full,
+  y       = ~pct,
+  color   = ~Office_space,
+  type    = "bar",
+  colors  = office_colors,
+  hovertemplate = "<b>%{x}</b><br>%{data.name}: %{y}%<extra></extra>"
+) %>%
+  layout(
+    barmode = "stack",
+    title   = list(text = "Office Preference by First-Listed School",
+                   font = list(size = 16)),
+    xaxis   = list(title = "School", tickangle = -15),
+    yaxis   = list(title = "% of Students", ticksuffix = "%"),
+    legend  = list(title = list(text = "Preference"),
+                   orientation = "h", y = -0.3),
+    plot_bgcolor  = "rgba(0,0,0,0)",
+    paper_bgcolor = "rgba(0,0,0,0)"
+  )
+
+p6
+p7
+```
+
+---
+
+## 5. Statistical Analysis
+
+### Chi-square Test: Office Preference vs. School
+
+```{r}
+#| label: chisq-office-school
+
+# Does school affiliation influence office preference?
+df_chisq <- df %>%
+  separate("School", into = c("School1", "School2", "School3"),
+           sep = " ", extra = "drop", fill = "right") %>%
+  filter(!is.na(School1), !is.na(Office_space))
+
+chisq_result <- chisq.test(table(df_chisq$School1, df_chisq$Office_space))
+
+cat("Chi-square Test: Office Preference vs. School\n")
+cat("----------------------------------------------\n")
+cat("Chi-square statistic:", round(chisq_result$statistic, 3), "\n")
+cat("Degrees of freedom  :", chisq_result$parameter, "\n")
+cat("p-value             :", round(chisq_result$p.value, 4), "\n\n")
+
+if (chisq_result$p.value < 0.05) {
+  cat("✅ Result: SIGNIFICANT (p < 0.05)\n")
+  cat("   School affiliation IS associated with office preference.\n")
+} else {
+  cat("❌ Result: NOT significant (p >= 0.05)\n")
+  cat("   No strong evidence that school affiliation affects office preference.\n")
+}
+```
+
+### Chi-square Test: Gender vs. Tuition Willingness
+
+```{r}
+#| label: chisq-gender-tuition
+
+# Does gender influence willingness to increase tuition?
+df_gt <- df %>%
+  mutate(
+    Gender = case_when(
+      Gender == "Female"                   ~ "Female",
+      Gender == "Male"                     ~ "Male",
+      Gender == "Other/ prefer not to say" ~ "Other"
+    )
+  ) %>%
+  filter(!is.na(Gender), !is.na(Increase_rate))
+
+chisq_gt <- chisq.test(table(df_gt$Gender, df_gt$Increase_rate))
+
+cat("Chi-square Test: Gender vs. Tuition Willingness\n")
+cat("-------------------------------------------------\n")
+cat("Chi-square statistic:", round(chisq_gt$statistic, 3), "\n")
+cat("Degrees of freedom  :", chisq_gt$parameter, "\n")
+cat("p-value             :", round(chisq_gt$p.value, 4), "\n\n")
+
+if (chisq_gt$p.value < 0.05) {
+  cat("✅ Result: SIGNIFICANT (p < 0.05)\n")
+  cat("   Gender IS associated with tuition willingness.\n")
+} else {
+  cat("❌ Result: NOT significant (p >= 0.05)\n")
+  cat("   No strong evidence that gender affects tuition willingness.\n")
+}
+```
+
+### Confidence Level vs. Tuition Willingness
+
+```{r}
+#| label: confidence-vs-tuition
+#| fig-cap: "Relationship between confidence in sustainability understanding and willingness to increase tuition"
+
+conf_levels <- c("Not Confident at All", "Slightly Confident",
+                 "Neutral", "Confident", "Extremely Confident")
+
+tuition_levels <- c("Not willing at all", "$1-$10", "$11-$20",
+                    "$21-$30", "anything above $30")
+
+# Heatmap: Confidence vs Tuition Willingness
+heatmap_df <- df %>%
+  filter(!is.na(Confidence), !is.na(Increase_rate)) %>%
+  mutate(
+    Confidence    = factor(Confidence, levels = conf_levels),
+    Increase_rate = factor(Increase_rate, levels = tuition_levels)
+  ) %>%
+  count(Confidence, Increase_rate) %>%
+  group_by(Confidence) %>%
+  mutate(pct = round(n / sum(n) * 100, 1)) %>%
+  ungroup()
+
+# Pivot to matrix for heatmap
+heatmap_matrix <- heatmap_df %>%
+  select(Confidence, Increase_rate, pct) %>%
+  pivot_wider(names_from = Increase_rate, values_from = pct, values_fill = 0)
+
+mat <- as.matrix(heatmap_matrix[, -1])
+rownames(mat) <- heatmap_matrix$Confidence
+
+p8 <- plot_ly(
+  x          = tuition_levels,
+  y          = conf_levels,
+  z          = mat,
+  type       = "heatmap",
+  colorscale = "Blues",
+  hovertemplate = "<b>Confidence:</b> %{y}<br><b>Tuition:</b> %{x}<br><b>%:</b> %{z}%<extra></extra>"
+) %>%
+  layout(
+    title  = list(text = "Confidence Level vs. Tuition Willingness (% within Confidence group)",
+                  font = list(size = 14)),
+    xaxis  = list(title = "Tuition Willingness", tickangle = -20),
+    yaxis  = list(title = "Confidence Level"),
+    margin = list(l = 150, b = 120)
+  )
+
+# Spearman correlation test
+df_corr <- df %>%
+  filter(!is.na(Confidence), !is.na(Increase_rate)) %>%
+  mutate(
+    conf_num  = as.integer(factor(Confidence, levels = conf_levels)),
+    tuition_num = as.integer(factor(Increase_rate, levels = tuition_levels))
+  )
+
+corr_test <- cor.test(df_corr$conf_num, df_corr$tuition_num, method = "spearman")
+
+cat("Spearman Correlation: Confidence vs. Tuition Willingness\n")
+cat("---------------------------------------------------------\n")
+cat("Correlation (rho):", round(corr_test$estimate, 3), "\n")
+cat("p-value          :", round(corr_test$p.value, 4), "\n\n")
+
+if (corr_test$p.value < 0.05) {
+  cat("✅ Significant positive correlation — students who are MORE confident\n")
+  cat("   in sustainability tend to be MORE willing to increase tuition.\n")
+} else {
+  cat("❌ No significant correlation between confidence and tuition willingness.\n")
+}
+
+p8
+```
