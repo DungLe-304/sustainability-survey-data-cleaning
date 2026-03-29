@@ -1,4 +1,4 @@
 # Tell GitHub Linguist to ignore generated files
 src/sustainability_cleaning_TonyLe_files/ linguist-vendored
-src/Data\ project\ TonyLe.html linguist-generated
-src/Data\ Cleaning,\ Tidying\ and\ Visualization.pdf linguist-documentation
+*.html linguist-generated
+*.pdf linguist-documentation
