@@ -1,12 +1,13 @@
-# 🌱 Sustainability Survey — Data Cleaning & Tidying
+# 🌱 Sustainability Survey — Data Cleaning, Tidying & Visualization
 
 ![R](https://img.shields.io/badge/R-4.5.2-276DC3?style=flat&logo=r&logoColor=white)
-![Quarto](https://img.shields.io/badge/Quarto-Document-4A90D9?style=flat&logo=quarto&logoColor=white)
+![Quarto](https://img.shields.io/badge/Quarto-HTML%20%7C%20PDF-4A90D9?style=flat&logo=quarto&logoColor=white)
 ![tidyverse](https://img.shields.io/badge/tidyverse-2.0.0-1A162D?style=flat)
+![plotly](https://img.shields.io/badge/plotly-4.12.0-3F4F75?style=flat&logo=plotly&logoColor=white)
 ![Excel](https://img.shields.io/badge/Microsoft_Excel-217346?style=flat&logo=microsoft-excel&logoColor=white)
 ![Status](https://img.shields.io/badge/Status-Completed-brightgreen?style=flat)
 
-A data cleaning and tidying project using **R**, **Quarto**, and **Excel** on a real-world sustainability survey dataset collected at Truman State University (Fall 2015).
+A complete data cleaning, tidying, and visualization project using **R**, **Quarto**, and **Excel** on a real-world sustainability survey dataset collected at Truman State University (Fall 2015).
 
 ---
 
@@ -17,7 +18,7 @@ A data cleaning and tidying project using **R**, **Quarto**, and **Excel** on a 
 - [Project Structure](#project-structure)
 - [Workflow](#workflow)
 - [Key Cleaning Steps](#key-cleaning-steps)
-- [Visualization](#visualization)
+- [Visualizations](#visualizations)
 - [Key Findings](#key-findings)
 - [Tools & Technologies](#tools--technologies)
 - [How to Run](#how-to-run)
@@ -26,7 +27,7 @@ A data cleaning and tidying project using **R**, **Quarto**, and **Excel** on a 
 
 ## Overview
 
-This project demonstrates a complete **data cleaning pipeline** — from raw, dirty survey data to a clean, analysis-ready dataset. The workflow combines preliminary data preparation in **Excel** with systematic cleaning and transformation in **R**, documented in a reproducible **Quarto** report.
+This project demonstrates a complete **data science pipeline** — from raw, dirty survey data to a clean, analysis-ready dataset with interactive visualizations. The workflow combines preliminary data preparation in **Excel** with systematic cleaning, transformation, and visualization in **R**, all documented in a fully reproducible **Quarto** report.
 
 The dataset comes from a student survey on attitudes toward a potential Sustainability Office at Truman State University, conducted by Dr. Alberts' STAT 376 class.
 
@@ -52,16 +53,20 @@ sustainability-survey-data-cleaning/
 ├── 📄 README.md
 │
 ├── 📂 raw_data/                              # Original files before any processing
-│   ├── sustainability_dirtydata.xlsx         # Raw dataset (dirty)
+│   ├── sustainability_dirtydata.xlsx         # Raw dataset (dirty) — original Excel
+│   ├── sustainability_dirtydata.csv          # Raw dataset — CSV version for quick preview
 │   └── Working.csv                           # Exported from Excel after column renaming
 │
 ├── 📂 cleaned_data/                          # Output files after cleaning
 │   ├── sustainability_working.xlsx           # Excel workbook: Dictionary + Working sheets
 │   └── sustainability_cleaned_TonyLe.csv    # Final cleaned dataset (R output)
 │
-└── 📂 src/                                   # Source code & report
-    ├── sustainability_cleaning_TonyLe.qmd   # Quarto source (R code + documentation)
-    └── HW03_TonyLe.pdf                       # Rendered PDF report
+└── 📂 src/                                   # Source code & reports
+    ├── sustainability_cleaning_TonyLe.qmd   # Quarto source (cleaning + visualization)
+    ├── Data project TonyLe.html              # Interactive HTML report (plotly)
+    ├── Data Cleaning, Tidying and            # Full PDF report
+    │   Visualization.pdf
+    └── sustainability_cleaning_TonyLe_files/ # HTML assets (plotly, bootstrap, etc.)
 ```
 
 ---
@@ -86,15 +91,17 @@ raw_data/sustainability_dirtydata.xlsx
               ▼
 ┌─────────────────────────────────┐
 │           R / QUARTO            │
-│  • Read Working.csv             │
-│  • 8 Cleaning Steps             │
-│  • Visualization                │
+│  • 8 Data Cleaning Steps        │
+│  • EDA Visualizations           │
+│  • Interactive Plots (plotly)   │
+│  • Statistical Analysis         │
 │  • Export cleaned .csv          │
 └─────────────────────────────────┘
               │
-              ▼
-cleaned_data/sustainability_cleaned_TonyLe.csv
-           (182 rows × 38 columns)
+        ┌─────┴─────┐
+        ▼           ▼
+   HTML Report   PDF Report
+  (interactive) (static)
 ```
 
 ---
@@ -103,7 +110,7 @@ cleaned_data/sustainability_cleaned_TonyLe.csv
 
 ### Step 1 — Excel: Data Dictionary & Column Renaming
 
-Created a **Data Dictionary** sheet mapping all 35 original column names to short, code-friendly names, descriptions, and coding schemes. New names were then transposed back into the Working sheet header row.
+Created a **Data Dictionary** sheet mapping all 35 original column names to short, code-friendly names, descriptions, and coding schemes.
 
 | New Name | Original Name (example) |
 |----------|------------------------|
@@ -127,21 +134,36 @@ Created a **Data Dictionary** sheet mapping all 35 original column names to shor
 
 ---
 
-## Visualization
+## Visualizations
 
-A stacked bar chart showing the distribution of students' willingness to increase tuition, broken down by their first-listed school. Schools are ordered from **least to most willing** based on mean willingness score.
+The interactive HTML report includes **8 plotly charts** and **3 statistical tests**:
 
-> Red shades = less willing · Blue shades = more willing
+| # | Chart | Type |
+|---|-------|------|
+| 1 | Gender Distribution | Interactive Donut Chart |
+| 2 | Grade Level Distribution | Interactive Bar Chart |
+| 3 | Heard About vs. Participated in Activities | Grouped Bar Chart |
+| 4 | Overall Confidence in Sustainability | Bar Chart |
+| 5 | Confidence Level by School | Stacked Bar Chart |
+| 6 | Office Preference (Physical vs. Online) | Donut Chart |
+| 7 | Office Preference by School | Stacked Bar Chart |
+| 8 | Tuition Willingness by First-Listed School | Stacked Bar Chart |
+
+**Statistical Tests:**
+- Chi-square: Office preference vs. School affiliation
+- Chi-square: Gender vs. Tuition willingness  
+- Spearman correlation: Confidence level vs. Tuition willingness (+ Heatmap)
 
 ---
 
 ## Key Findings
 
-- 🏫 **Business** had the **least** willingness to increase tuition (mean score = **1.83** out of 5, 30.4% "Not willing at all")
-- 🔬 **Science & Math** had the **most** willingness (mean score = **2.62**, only 17.0% "Not willing at all")
-- 📊 Across **all schools**, the two lowest categories ("Not willing at all" and "$1–$10") dominated responses — suggesting cost resistance is a **university-wide phenomenon**, not school-specific
-- 👥 **50 out of 182 students** (27.5%) were affiliated with the School of Science & Mathematics (SAM)
-- 📢 **105 students** (57.7%) had heard about Sustainability Week; only a subset had actually participated
+- 🏫 **Business** had the **least** willingness to increase tuition (mean = **1.83**/5, 30.4% "Not willing at all")
+- 🔬 **Science & Math** had the **most** willingness (mean = **2.62**/5, only 17.0% "Not willing at all")
+- 📢 **105 students** (57.7%) had *heard about* Sustainability Week, but very few actually *participated* — a clear **awareness-to-engagement gap**
+- 🏢 Most students preferred a **Physical Office** over an online one, despite the extra cost
+- 📊 Cost resistance to tuition increases is **university-wide**, not driven by any specific school
+- 👥 **50 out of 182 students** (27.5%) were affiliated with the School of Science & Mathematics
 
 ---
 
@@ -151,7 +173,8 @@ A stacked bar chart showing the distribution of students' willingness to increas
 |------|---------|
 | **R 4.5.2** | Data cleaning, transformation, visualization |
 | **tidyverse** | `dplyr`, `tidyr`, `ggplot2`, `stringr` |
-| **Quarto** | Reproducible report (code + narrative → PDF) |
+| **plotly** | Interactive visualizations in HTML |
+| **Quarto** | Reproducible report (HTML + PDF output) |
 | **Microsoft Excel** | Data dictionary, column renaming, CSV export |
 
 ---
@@ -164,19 +187,19 @@ git clone https://github.com/DungLe-304/sustainability-survey-data-cleaning.git
 cd sustainability-survey-data-cleaning
 ```
 
-2. **Ensure R packages are installed**
+2. **Install R packages**
 ```r
-install.packages("tidyverse")
+install.packages(c("tidyverse", "plotly", "scales"))
 ```
 
-3. **Render the Quarto document** from the `src/` folder
+3. **Render the Quarto document**
 ```bash
-quarto render src/sustainability_cleaning_TonyLe.qmd --to pdf
+quarto render src/sustainability_cleaning_TonyLe.qmd --to html
 ```
 
-Or open in **RStudio** and click **Render**.
+Or open in **RStudio** → click **Render**.
 
-> ⚠️ The `.qmd` file reads from `../raw_data/Working.csv` and exports to `../cleaned_data/`. Make sure the folder structure is intact before rendering.
+> ⚠️ The `.qmd` file reads from `../raw_data/Working.csv` and exports to `../cleaned_data/`. Keep the folder structure intact before rendering.
 
 ---
 
